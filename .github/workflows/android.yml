@@ -51,20 +51,64 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724" >> "$GITHUB_ENV"
 
       - name: Fetch Android build dependencies
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
         run: |
+          set -euo pipefail
+          D="$GITHUB_WORKSPACE/3rd_party/Src"
+
+          # Full clone of a branch/tag into a clean folder.
+          clone() { rm -rf "$3"; git clone -q --depth 1 --branch "$2" "$1" "$3"; }
+          # Only one sub-folder of a big repo (headers of SDKs whose libraries Android never links).
+          sparse() {
+            rm -rf "$3"
+            git clone -q --depth 1 --filter=blob:none --sparse --branch "$2" "$1" "$3"
+            git -C "$3" sparse-checkout set "$4"
+          }
+
+          # SDL2 / OpenAL Soft: source trees for OGSR_SDL2_DIR / OGSR_OPENAL_DIR
           mkdir -p "$GITHUB_WORKSPACE/.deps"
-          git clone --depth 1 --branch release-2.30.11 \
-            https://github.com/libsdl-org/SDL.git \
-            "$GITHUB_WORKSPACE/.deps/SDL2-2.30.11"
-          git clone --depth 1 --branch 1.24.3 \
-            https://github.com/kcat/openal-soft.git \
-            "$GITHUB_WORKSPACE/.deps/openal-soft-1.24.3"
-          git clone --depth 1 --branch VER-2-13-3 \
-            https://gitlab.freedesktop.org/freetype/freetype.git \
-            "$GITHUB_WORKSPACE/3rd_party/Src/freetype"
-          git clone --depth 1 --branch 6.2 \
-            https://github.com/mikke89/RmlUi.git \
-            "$GITHUB_WORKSPACE/3rd_party/Src/RmlUi"
+          clone https://github.com/libsdl-org/SDL.git      release-2.30.11 "$GITHUB_WORKSPACE/.deps/SDL2-2.30.11"
+          clone https://github.com/kcat/openal-soft.git    1.24.3          "$GITHUB_WORKSPACE/.deps/openal-soft-1.24.3"
+
+          # The same set Update_Components.cmd downloads on Windows. The repository only holds
+          # CMakeLists/props stubs for these; the sources come from here.
+          clone https://github.com/cameron314/concurrentqueue.git master "$D/concurrentqueue/concurrentqueue"
+          clone https://github.com/AgentD/squashfs-tools-ng.git   master "$D/libsquashfs/squashfs-tools-ng"
+          clone https://github.com/lz4/lz4.git                    dev    "$D/lz4/lz4"
+          clone https://github.com/facebook/zstd.git              dev    "$D/zstd/zstd"
+          clone https://github.com/tzcnt/cpputils.git             main   "$D/cpputils/cpputils"
+          clone https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git master \
+            "$D/VulkanMemoryAllocator/VulkanMemoryAllocator"
+
+          # mimalloc (this missing folder was the CMake error at CMakeLists.txt:73).
+          clone https://github.com/microsoft/mimalloc.git dev2 "$D/mimalloc/mimalloc"
+          # Our patch (guard page counted into mi_usable_size) has been fixed upstream in current dev2, and no longer
+          # applies there. Apply it only while it still fits; otherwise upstream already has the fix.
+          PATCH="$D/mimalloc/patches/0001-guarded-usable-size-without-padding.patch"
+          if git -C "$D/mimalloc/mimalloc" apply --check "$PATCH" 2>/dev/null; then
+            git -C "$D/mimalloc/mimalloc" apply "$PATCH"
+            echo "mimalloc: local patch applied"
+          else
+            echo "mimalloc: patch not needed / does not apply to this dev2 (fixed upstream), skipped"
+          fi
+
+          # Headers only: the Vulkan renderer lists these include folders in its CMake and #includes them.
+          sparse https://github.com/NVIDIA/DLSS.git                              v310.4.0 "$D/NVIDIA_DLSS/DLSS"       include
+          sparse https://github.com/NVIDIAGameWorks/Streamline.git               v2.12.0  "$D/NVIDIA_Streamline"      include
+          sparse https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK.git  v1.1.4   "$D/AMD_FidelityFX"         sdk/include
+
+          # Folders the engine's CMake adds with add_subdirectory
+          clone https://gitlab.freedesktop.org/freetype/freetype.git VER-2-13-3 "$D/freetype"
+          clone https://github.com/mikke89/RmlUi.git                 6.2        "$D/RmlUi"
+
+          # Fail here, with a readable message, instead of 700 lines later inside CMake.
+          for p in mimalloc/mimalloc zstd lz4 libsquashfs freetype RmlUi Xiph/libogg Xiph/libvorbis Xiph/libtheora lzo ode imgui; do
+            test -f "$D/$p/CMakeLists.txt" || { echo "::error::missing $D/$p/CMakeLists.txt"; exit 1; }
+          done
+          test -f "$D/NVIDIA_Streamline/include/sl.h"
+          test -f "$D/NVIDIA_DLSS/DLSS/include/nvsdk_ngx_vk.h"
+          test -f "$D/AMD_FidelityFX/sdk/include/FidelityFX/host/ffx_fsr3upscaler.h"
 
       - name: Configure Android ARM64 engine
         run: |
