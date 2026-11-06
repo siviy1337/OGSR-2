@@ -98,6 +98,10 @@ jobs:
           sparse https://github.com/NVIDIAGameWorks/Streamline.git               v2.12.0  "$D/NVIDIA_Streamline"      include
           sparse https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK.git  v1.1.4   "$D/AMD_FidelityFX"         sdk/include
 
+          # meshoptimizer v1.2: vk_meshopt.cpp / vk_world_gpu.cpp / vk_Visual.cpp #include its sources by relative
+          # path (src/*.cpp, demo/clusterlod.h), so the whole tree goes straight into 3rd_party/Src/meshoptimizer.
+          clone https://github.com/zeux/meshoptimizer.git v1.2 "$D/meshoptimizer"
+
           # Folders the engine's CMake adds with add_subdirectory
           clone https://gitlab.freedesktop.org/freetype/freetype.git VER-2-13-3 "$D/freetype"
           clone https://github.com/mikke89/RmlUi.git                 6.2        "$D/RmlUi"
@@ -109,6 +113,9 @@ jobs:
           test -f "$D/NVIDIA_Streamline/include/sl.h"
           test -f "$D/NVIDIA_DLSS/DLSS/include/nvsdk_ngx_vk.h"
           test -f "$D/AMD_FidelityFX/sdk/include/FidelityFX/host/ffx_fsr3upscaler.h"
+          test -f "$D/meshoptimizer/src/meshoptimizer.h"
+          test -f "$D/meshoptimizer/src/partition.cpp"
+          test -f "$D/meshoptimizer/demo/clusterlod.h"
 
       - name: Configure Android ARM64 engine
         run: |
@@ -123,7 +130,8 @@ jobs:
             -DOGSR_WITH_GNS=OFF
 
       - name: Compile engine
-        run: cmake --build build-android --target xr_3da --parallel 4
+        # "-k 0": do not stop at the first failing file, so one run lists every compile error at once.
+        run: cmake --build build-android --target xr_3da --parallel 4 -- -k 0
 
       - name: Package and sign APK
         shell: bash
