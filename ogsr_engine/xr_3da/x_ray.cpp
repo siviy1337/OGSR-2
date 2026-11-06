@@ -712,10 +712,26 @@ int main(int argc, char** argv)
             __android_log_print(ANDROID_LOG_ERROR, "ogsr", "pthread_create(16 MB) failed: %d, staying on SDLThread", err);
         }
     }
-    // fsgame.ltx, the data pack and the logs live in the app's external files folder
-    // (/sdcard/Android/data/<package>/files): adb push reaches it without root and the app needs no storage permission.
-    if (const char* dir = SDL_AndroidGetExternalStoragePath())
+    // Game data is stored in the shared Downloads directory, outside the app sandbox.
+    // Preferred layout: /storage/emulated/0/Download/OGSR/fsgame.ltx + gamedata/.
+    // Also accept fsgame.ltx directly in Download for users who already have that layout.
+    // MANAGE_EXTERNAL_STORAGE is declared in AndroidManifest.xml; Android 11+ requires
+    // the user to enable "All files access" for OGSR in system settings.
+    const char* ogsrDownloadDir = "/storage/emulated/0/Download/OGSR";
+    const char* publicDownloadDir = "/storage/emulated/0/Download";
+    if (access("/storage/emulated/0/Download/OGSR/fsgame.ltx", R_OK) == 0 && chdir(ogsrDownloadDir) == 0)
+    {
+        // Preferred folder selected.
+    }
+    else if (access("/storage/emulated/0/Download/fsgame.ltx", R_OK) == 0 && chdir(publicDownloadDir) == 0)
+    {
+        // Compatibility: game files placed directly in Download.
+    }
+    else if (const char* dir = SDL_AndroidGetExternalStoragePath())
+    {
+        // Keep the old location as a fallback so existing installations still start.
         chdir(dir);
+    }
     freopen("stderr.log", "w", stderr);
     freopen("stdout.log", "w", stdout);
     setvbuf(stderr, nullptr, _IONBF, 0); // a crash must not eat the last lines
