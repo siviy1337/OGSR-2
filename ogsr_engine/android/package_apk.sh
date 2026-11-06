@@ -5,7 +5,7 @@
 #   MSYS_NO_PATHCONV=1 wsl -d archlinux bash /mnt/d/OGSR-2/ogsr_engine/android/package_apk.sh
 #
 # Output: D:\android_stage\ogsr.apk (adb install -r it). Game data is NOT in the APK: it goes to
-# /sdcard/Android/data/com.ogsr.online/files with adb push (see push_data.sh).
+# /sdcard/Download/OGSR with adb push (see push_data.sh).
 set -euo pipefail
 
 MIRROR=${OGSR_ANDROID_MIRROR:-/root/ogsr_android}
@@ -30,8 +30,15 @@ javac -encoding UTF-8 -nowarn -Xlint:-options -source 8 -target 8 -bootclasspath
     $(find "$SDL2/android-project/app/src/main/java" "$SRC/java" -name '*.java')
 "$BT/d8" --release --min-api 29 --lib "$PLATFORM_JAR" --output "$T/dex" $(find "$T/classes" -name '*.class')
 
+# Compile launcher icon resources, then link them into the APK.
+"$BT/aapt2" compile --dir "$SRC/res" -o "$T/launcher-res.zip"
+mkdir -p "$T/compiled-res"
+(cd "$T/compiled-res" && unzip -q "$T/launcher-res.zip")
+RES_ARGS=()
+while IFS= read -r -d '' resource; do RES_ARGS+=(-R "$resource"); done < <(find "$T/compiled-res" -name '*.flat' -print0)
+
 "$BT/aapt2" link -o "$T/base.apk" --manifest "$SRC/AndroidManifest.xml" -I "$PLATFORM_JAR" \
-    --min-sdk-version 29 --target-sdk-version 34
+    --min-sdk-version 29 --target-sdk-version 34 "${RES_ARGS[@]}"
 
 STRIP=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
 cp "$BUILD/xr_3da/libmain.so" "$BUILD/SDL2/libSDL2.so" \

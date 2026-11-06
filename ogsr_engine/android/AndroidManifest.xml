@@ -18,12 +18,16 @@
     <uses-feature android:name="android.hardware.type.pc" android:required="false" />
 
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Shared Download/OGSR game data. This is a special-access permission on Android 11+;
+         the user must enable "All files access" for OGSR in system settings. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <!-- The updater (xr_3da/xr_update.h, java OgsrUpdate): the check and the download, and handing a new APK to the
          system installer (the player confirms it; the first time Android also asks to allow installs from OGSR). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <application android:label="OGSR"
+    <application android:label="S.T.A.L.K.E.R OGSR2"
+        android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:hasCode="true"
         android:extractNativeLibs="true"
@@ -34,7 +38,7 @@
         android:hardwareAccelerated="true">
 
         <activity android:name="com.ogsr.online.OgsrActivity"
-            android:label="OGSR"
+            android:label="S.T.A.L.K.E.R OGSR2"
             android:screenOrientation="sensorLandscape"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleInstance"
